@@ -41,7 +41,7 @@ jobs:
           PY
       - name: Leave time to observe independent guest supervision
         shell: bash
-        run: sleep 30
+        run: sleep 32
       - name: Record completed payload
         shell: bash
         run: |
