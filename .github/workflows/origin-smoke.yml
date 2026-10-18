@@ -41,7 +41,7 @@ jobs:
           PY
       - name: Leave time to observe independent guest supervision
         shell: bash
-        run: sleep 30
+        run: sleep 32
       - name: Record completed payload
         shell: bash
         run: |
@@ -53,3 +53,6 @@ jobs:
           path.write_text(json.dumps(proof, sort_keys=True))
           print(json.dumps(proof, sort_keys=True))
           PY
+
+
+[You have received this identical output 3 times. Re-reading '/tmp/hotlap-origin-fixtures-20261018/.github/workflows/origin-smoke.yml:raw' will not change it — use a narrower selector (path:A-B), or proceed with the edit.]
