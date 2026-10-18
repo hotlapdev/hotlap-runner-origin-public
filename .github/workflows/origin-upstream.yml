@@ -1,0 +1,15 @@
+name: Origin upstream control
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [origin-test-base]
+
+permissions: {}
+
+jobs:
+  fixed-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo 'Generated origin-provenance control; no checkout, secrets or downloads.'

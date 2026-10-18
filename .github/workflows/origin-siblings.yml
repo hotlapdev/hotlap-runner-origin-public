@@ -1,0 +1,61 @@
+name: Origin unrelated job control
+
+on:
+  pull_request:
+    branches: [origin-test-base]
+
+permissions: {}
+
+jobs:
+  runner-smoke:
+    if: github.event.pull_request.head.repo.id != github.event.repository.id
+    runs-on: hotlap
+    timeout-minutes: 5
+    env:
+      HOTLAP_EXPECTED_IMAGE_VERSION: runner-smoke-2.338.0-1
+    steps:
+      - name: Prove fresh VM identity and baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n true
+          python3 - <<'PY'
+          import json, os, pathlib, socket, time
+          image = json.loads(pathlib.Path('/etc/hotlap-runner-image.json').read_text())
+          assert image['image_version'] == os.environ['HOTLAP_EXPECTED_IMAGE_VERSION']
+          assert os.getuid() == 1000
+          assert os.cpu_count() == 2
+          memory = int(next(line.split()[1] for line in pathlib.Path('/proc/meminfo').read_text().splitlines() if line.startswith('MemTotal:'))) * 1024
+          assert 3 * 1024**3 < memory <= 4 * 1024**3
+          assert not pathlib.Path('/run/hotlap-runner/jit-config').exists()
+          assert pathlib.Path('/var/lib/hotlap-runner/started').is_file()
+          supervisor = json.loads(pathlib.Path('/var/lib/hotlap-runner/result.json').read_text())
+          assert supervisor['phase'] == 'running' and supervisor['launched'] is True
+          vm_id = next(part.split('=', 1)[1] for part in pathlib.Path('/proc/cmdline').read_text().split() if part.startswith('cumulus.vmid='))
+          disk = os.statvfs('/')
+          proof = {'repository': os.environ['GITHUB_REPOSITORY'], 'run_id': int(os.environ['GITHUB_RUN_ID']), 'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']), 'job': os.environ['GITHUB_JOB'], 'runner_name': os.environ['RUNNER_NAME'], 'vm_id': vm_id, 'hostname': socket.gethostname(), 'image_version': image['image_version'], 'runner_version': image['runner']['version'], 'guest_version': image['guest']['version'], 'kernel': os.uname().release, 'vcpus': os.cpu_count(), 'memory_bytes': memory, 'root_bytes': disk.f_blocks * disk.f_frsize, 'available_bytes': disk.f_bavail * disk.f_frsize, 'started_at': int(time.time())}
+          path = pathlib.Path('/var/lib/hotlap-runner/job-proof.json')
+          with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as out:
+              json.dump(proof, out, sort_keys=True)
+          print(json.dumps(proof, sort_keys=True))
+          PY
+      - name: Leave time to observe independent guest supervision
+        shell: bash
+        run: sleep 30
+      - name: Record completed payload
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, time
+          path = pathlib.Path('/var/lib/hotlap-runner/job-proof.json')
+          proof = json.loads(path.read_text())
+          proof['payload_completed_at'] = int(time.time())
+          path.write_text(json.dumps(proof, sort_keys=True))
+          print(json.dumps(proof, sort_keys=True))
+          PY
+  unrelated-control:
+    if: github.event.pull_request.head.repo.id != github.event.repository.id
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo 'Policy must not cancel this unrelated generated control job.'
